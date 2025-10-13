@@ -8,6 +8,9 @@ from docx.oxml.shared import OxmlElement, qn
 from typing import Optional
 import re
 from config import Config
+from typing import Tuple
+import hashlib
+import requests
 
 # 设置日志
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +38,9 @@ class WordConverter:
         try:
             logger.info("开始转换Markdown到Word...")
             
+            # 预处理：下载远程图片并重写为本地 media 路径
+            markdown_content = self._preprocess_markdown_assets(markdown_content)
+
             # 创建新的Word文档
             doc = Document()
             
@@ -105,6 +111,42 @@ class WordConverter:
         except Exception as e:
             logger.error(f"转换Markdown到Word时出错: {str(e)}")
             raise Exception(f"转换Markdown到Word失败: {str(e)}")
+
+    def markdown_to_word_pandoc(self, markdown_content: str, output_filename: Optional[str] = None) -> str:
+        """使用 Pandoc 高保真将 Markdown 转换为 Word。"""
+        try:
+            import pypandoc
+            logger.info("使用 Pandoc 将 Markdown 转为 Word...")
+            # 预处理：下载远程图片并重写为本地 media 路径
+            markdown_content = self._preprocess_markdown_assets(markdown_content)
+            if not output_filename:
+                from datetime import datetime
+                output_filename = f"converted_document_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            elif not output_filename.endswith('.docx'):
+                output_filename += '.docx'
+            output_path = os.path.join(self.output_dir, output_filename)
+            # 资源路径：输出目录与其 media 子目录，供图片/表格资源查找
+            media_dir = os.path.join(self.output_dir, 'media')
+            os.makedirs(media_dir, exist_ok=True)
+            resource_paths = [self.output_dir, media_dir]
+            extra_args = [
+                f"--resource-path={os.pathsep.join(resource_paths)}",
+            ]
+            # Pandoc 转换（开启表格方言）
+            pypandoc.convert_text(
+                markdown_content,
+                'docx',
+                format='gfm+pipe_tables+grid_tables+table_captions',
+                outputfile=output_path,
+                extra_args=extra_args,
+            )
+            logger.info(f"Pandoc 转换完成: {output_path}")
+            return output_path
+        except Exception as e:
+            logger.error(f"Pandoc 转换Markdown到Word失败: {str(e)}")
+            # 回退到内置转换
+            logger.info("回退到内置转换器")
+            return self.markdown_to_word(markdown_content, output_filename)
     
     def _format_heading(self, heading):
         """格式化标题"""
@@ -180,6 +222,14 @@ class WordConverter:
     def _add_image(self, doc, image_path: str, alt_text: str = ""):
         """插入图片，若找不到路径则作为普通段落插入路径文本"""
         try:
+            # 支持远程URL：已在预处理阶段下载到本地 media 目录
+            if image_path.startswith('http://') or image_path.startswith('https://'):
+                local_path = self._download_image_to_media(image_path)
+                if local_path is None:
+                    self._add_paragraph(doc, f"[图片未找到] {image_path}")
+                    return
+                image_path = local_path
+
             # 支持相对路径（相对于输出目录）
             candidate_paths = [
                 image_path,
@@ -201,6 +251,49 @@ class WordConverter:
         except Exception as e:
             logger.error(f"插入图片失败: {str(e)}")
             self._add_paragraph(doc, f"[图片插入失败] {image_path}")
+
+    def _preprocess_markdown_assets(self, markdown_content: str) -> str:
+        """下载远程图片为本地 media 路径，并重写Markdown中的链接。"""
+        os.makedirs(self.output_dir, exist_ok=True)
+        media_dir = os.path.join(self.output_dir, 'media')
+        os.makedirs(media_dir, exist_ok=True)
+
+        pattern = re.compile(r'!\[(?P<alt>[^\]]*)\]\((?P<url>https?://[^\)\s]+)(?:\s+"(?P<title>.*?)")?\)')
+
+        def repl(m: re.Match) -> str:
+            url = m.group('url')
+            alt = m.group('alt') or 'image'
+            title = m.group('title')
+            local = self._download_image_to_media(url)
+            if local is None:
+                return m.group(0)
+            rel_path = os.path.relpath(local, self.output_dir).replace('\\', '/')
+            if title:
+                return f"![{alt}]({rel_path} \"{title}\")"
+            return f"![{alt}]({rel_path})"
+
+        return pattern.sub(repl, markdown_content)
+
+    def _download_image_to_media(self, url: str) -> Optional[str]:
+        try:
+            os.makedirs(self.output_dir, exist_ok=True)
+            media_dir = os.path.join(self.output_dir, 'media')
+            os.makedirs(media_dir, exist_ok=True)
+            # 生成稳定文件名
+            ext = os.path.splitext(url.split('?')[0].split('#')[0])[1]
+            if not ext or len(ext) > 5:
+                ext = '.png'
+            name = hashlib.sha256(url.encode('utf-8')).hexdigest()[:16] + ext
+            path = os.path.join(media_dir, name)
+            if not os.path.isfile(path):
+                resp = requests.get(url, timeout=15)
+                resp.raise_for_status()
+                with open(path, 'wb') as f:
+                    f.write(resp.content)
+            return path
+        except Exception as e:
+            logger.warning(f"下载远程图片失败: {url} - {e}")
+            return None
     
     def _add_paragraph(self, doc, text):
         """添加段落"""
@@ -250,3 +343,166 @@ class WordConverter:
         except Exception as e:
             logger.error(f"转换Markdown文件时出错: {str(e)}")
             raise Exception(f"转换Markdown文件失败: {str(e)}")
+
+    def word_to_markdown(self, docx_path: str) -> str:
+        """
+        将Word文档（.docx）转换为简化的Markdown文本。
+        说明：为满足“在原文件上进行修改”的需求，将Word提取为Markdown，便于用大模型修改后再导出。
+        """
+        try:
+            if not os.path.isfile(docx_path):
+                raise FileNotFoundError(f"文件不存在: {docx_path}")
+            doc = Document(docx_path)
+            parts = []
+            for block in doc.element.body:
+                if block.tag.endswith('}p'):
+                    p = self._paragraph_to_markdown(block)
+                    if p is not None:
+                        parts.append(p)
+                elif block.tag.endswith('}tbl'):
+                    md_table = self._table_to_markdown(block)
+                    parts.append(md_table)
+            return "\n\n".join([p for p in parts if p is not None and str(p).strip() != ""])
+        except Exception as e:
+            logger.error(f"Word 转 Markdown 失败: {str(e)}")
+            raise
+
+    def word_to_markdown_pandoc(self, docx_path: str) -> str:
+        """使用 Pandoc 高保真将 Word 转换为 Markdown。"""
+        try:
+            import pypandoc
+            logger.info("使用 Pandoc 将 Word 提取为 Markdown...")
+            if not os.path.isfile(docx_path):
+                raise FileNotFoundError(f"文件不存在: {docx_path}")
+            # 将媒体资源提取到 output_dir/media，并将链接指向相对路径 media/xxx
+            media_dir_name = 'media'
+            media_dir_abs = os.path.join(self.output_dir, media_dir_name)
+            os.makedirs(media_dir_abs, exist_ok=True)
+            md = pypandoc.convert_file(
+                docx_path,
+                'gfm+pipe_tables+grid_tables+table_captions',
+                extra_args=[f"--extract-media={media_dir_abs}"]
+            )
+            # 规范化为相对 media 路径，避免绝对路径导致资源找不到
+            normalized = md.replace(media_dir_abs.replace('\\','/'), media_dir_name)
+            return normalized
+        except Exception as e:
+            logger.error(f"Pandoc 提取失败: {str(e)}，回退到简化提取")
+            return self.word_to_markdown(docx_path)
+
+    def has_pandoc(self) -> bool:
+        try:
+            import pypandoc
+            pypandoc.get_pandoc_version()
+            return True
+        except Exception:
+            return False
+
+    def _paragraph_to_markdown(self, p_elm) -> str:
+        from docx.text.paragraph import Paragraph
+        from docx.oxml.ns import qn
+        try:
+            paragraph = Paragraph(p_elm, None)
+            # 检测图片：若段落包含图片，导出图片并返回图片Markdown
+            image_md = self._extract_images_from_paragraph(paragraph)
+            if image_md:
+                return image_md
+
+            text = paragraph.text or ""
+            if text.strip() == "":
+                return ""
+            # 标题映射
+            style_name = (getattr(paragraph.style, 'name', '') or "").lower()
+            for level in range(1, 5):
+                if f"heading {level}" in style_name:
+                    return f"{'#' * level} {text}"
+
+            # 列表嵌套（简化）：根据 numPr/ilvl 生成缩进
+            level = 0
+            is_list = False
+            try:
+                pPr = paragraph._p.pPr
+                if pPr is not None and pPr.numPr is not None:
+                    is_list = True
+                    ilvl = pPr.numPr.ilvl
+                    if ilvl is not None and ilvl.val is not None:
+                        level = int(ilvl.val)
+            except Exception:
+                pass
+            if is_list:
+                indent = "  " * max(0, level)
+                return f"{indent}- {text}"
+
+            return text
+        except Exception:
+            return ""
+
+    def _table_to_markdown(self, tbl_elm) -> str:
+        from docx.table import Table
+        try:
+            table = Table(tbl_elm, None)
+            rows = table.rows
+            if not rows:
+                return ""
+            # 取第一行为表头
+            header_cells = [self._cell_text_with_merge_hint(c) for c in rows[0].cells]
+            sep_cells = ["---" for _ in header_cells]
+            md_lines = ["| " + " | ".join(header_cells) + " |", "| " + " | ".join(sep_cells) + " |"]
+            for r in rows[1:]:
+                md_lines.append("| " + " | ".join([self._cell_text_with_merge_hint(c) for c in r.cells]) + " |")
+            return "\n".join(md_lines)
+        except Exception:
+            return ""
+
+    def _cell_text_with_merge_hint(self, cell) -> str:
+        """返回单元格文本并附带合并提示（Markdown不支持合并，故添加提示）。"""
+        try:
+            text = (cell.text or "").strip()
+            tcPr = getattr(cell._tc, 'tcPr', None)
+            hints = []
+            if tcPr is not None:
+                gridSpan = getattr(tcPr, 'gridSpan', None)
+                if gridSpan is not None and getattr(gridSpan, 'val', None):
+                    hints.append(f"colspan={gridSpan.val}")
+                vMerge = getattr(tcPr, 'vMerge', None)
+                if vMerge is not None:
+                    val = getattr(vMerge, 'val', None)
+                    if val is None or str(val) == 'continue':
+                        hints.append("rowspan=continue")
+                    elif str(val) == 'restart':
+                        hints.append("rowspan=start")
+            if hints:
+                return f"{text} <{' '.join(hints)}>"
+            return text
+        except Exception:
+            return (cell.text or "").strip()
+
+    def _extract_images_from_paragraph(self, paragraph) -> str:
+        """提取段落中的第一张图片为文件并返回图片Markdown；若无图片则返回空串。"""
+        try:
+            # 查找 run 中的图片关系
+            for run in paragraph.runs:
+                drawing_elms = run._element.xpath('.//a:blip')
+                if not drawing_elms:
+                    continue
+                # 取首个图片关系id
+                r_embed = drawing_elms[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                if not r_embed:
+                    continue
+                # 定位图片part
+                image_part = paragraph.part.related_parts.get(r_embed)
+                if image_part is None:
+                    continue
+                # 保存图片到输出目录
+                os.makedirs(self.output_dir, exist_ok=True)
+                ext = os.path.splitext(image_part.partname.basename())[1] or '.png'
+                from datetime import datetime
+                img_name = f"extracted_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}{ext}"
+                img_path = os.path.join(self.output_dir, img_name)
+                with open(img_path, 'wb') as fp:
+                    fp.write(image_part.blob)
+                # 返回Markdown图片语法
+                return f"![image]({img_name})"
+        except Exception as e:
+            logger.warning(f"提取图片失败: {e}")
+        return ""

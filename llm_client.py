@@ -79,3 +79,38 @@ class LLMClient:
         except Exception as e:
             logger.error(f"API连接测试失败: {str(e)}")
             return False
+
+    def revise_markdown(self, existing_markdown: str, instruction: str, model: Optional[str] = None) -> str:
+        """根据用户指令在原有Markdown基础上进行修改并返回新Markdown。
+
+        Args:
+            existing_markdown: 现有的Markdown内容
+            instruction: 修改说明，如“优化措辞，保留结构，添加一节风险评估”等
+            model: 可选，指定覆盖默认模型
+
+        Returns:
+            修改后的Markdown内容
+        """
+        try:
+            used_model = model or self.model
+            prompt = (
+                "你是一个专业的文档编辑助手。请严格输出Markdown，不要额外解释。\n"
+                "给定现有Markdown文档与用户修改指令，请在保留合理结构的基础上进行修改。\n"
+                "- 保持Markdown语法正确\n"
+                "- 允许插入图片与表格（使用标准Markdown语法）\n"
+                "- 若用户要求创建新文件，则完整输出修改后的文档\n\n"
+                f"[修改指令]\n{instruction}\n\n[现有Markdown]\n{existing_markdown}"
+            )
+            response = self.client.chat.completions.create(
+                model=used_model,
+                messages=[
+                    {"role": "system", "content": "你是专业的Markdown文档编辑器。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+                max_tokens=4000,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"修改Markdown时出错: {str(e)}")
+            raise Exception(f"修改Markdown失败: {str(e)}")
