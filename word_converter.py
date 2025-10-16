@@ -3,6 +3,7 @@ import logging
 import markdown
 from docx import Document
 from docx.shared import Inches
+from docx.shared import RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.shared import OxmlElement, qn
 from typing import Optional
@@ -27,19 +28,21 @@ class WordConverter:
     def markdown_to_word(self, markdown_content: str, output_filename: Optional[str] = None) -> str:
         """
         将Markdown内容转换为Word文档
-        
+
         Args:
             markdown_content: Markdown内容
             output_filename: 输出文件名
-            
+
         Returns:
             生成的Word文件路径
         """
         try:
             logger.info("开始转换Markdown到Word...")
-            
+            logger.info(f"输出文件名: {output_filename}")
+
             # 预处理：下载远程图片并重写为本地 media 路径
             markdown_content = self._preprocess_markdown_assets(markdown_content)
+            logger.info("预处理完成，开始解析Markdown内容...")
 
             # 创建新的Word文档
             doc = Document()
@@ -132,11 +135,11 @@ class WordConverter:
             extra_args = [
                 f"--resource-path={os.pathsep.join(resource_paths)}",
             ]
-            # Pandoc 转换（开启表格方言）
+            # Pandoc 转换（使用最稳定的格式）
             pypandoc.convert_text(
                 markdown_content,
                 'docx',
-                format='gfm+pipe_tables+grid_tables+table_captions',
+                format='markdown',
                 outputfile=output_path,
                 extra_args=extra_args,
             )
@@ -220,15 +223,23 @@ class WordConverter:
         return i
 
     def _add_image(self, doc, image_path: str, alt_text: str = ""):
-        """插入图片，若找不到路径则作为普通段落插入路径文本"""
+        """插入图片，若找不到路径则显示占位符而不显示假链接"""
         try:
+            logger.info(f"尝试插入图片: {image_path}, alt_text: {alt_text}")
+
             # 支持远程URL：已在预处理阶段下载到本地 media 目录
             if image_path.startswith('http://') or image_path.startswith('https://'):
+                logger.info(f"处理远程URL图片: {image_path}")
                 local_path = self._download_image_to_media(image_path)
                 if local_path is None:
-                    self._add_paragraph(doc, f"[图片未找到] {image_path}")
+                    logger.warning(f"无法下载远程图片: {image_path}")
+                    # 显示占位符而不是假链接
+                    p = doc.add_paragraph()
+                    run = p.add_run(f"[图片: {alt_text or '未命名图片'}]")
+                    run.font.color.rgb = RGBColor(128, 128, 128)  # 灰色
                     return
                 image_path = local_path
+                logger.info(f"远程图片已下载到: {image_path}")
 
             # 支持相对路径（相对于输出目录）
             candidate_paths = [
@@ -237,12 +248,65 @@ class WordConverter:
             ]
             actual = None
             for p in candidate_paths:
+                logger.info(f"检查路径: {p}")
                 if os.path.isfile(p):
                     actual = p
+                    logger.info(f"找到图片文件: {actual}")
                     break
+
+            # 如果还找不到，尝试从media目录查找
+            if actual is None and not os.path.isabs(image_path):
+                media_dir = os.path.join(self.output_dir, 'media')
+                logger.info(f"在media目录中查找: {media_dir}")
+
+                if image_path.startswith('media/'):
+                    # 如果路径已经是 media/filename 格式
+                    actual_path = os.path.join(self.output_dir, image_path)
+                    logger.info(f"检查media格式路径: {actual_path}")
+                    if os.path.isfile(actual_path):
+                        actual = actual_path
+                        logger.info(f"在media目录中找到图片: {actual}")
+                    else:
+                        # 尝试直接在media目录中查找文件名
+                        filename = os.path.basename(image_path)
+                        media_path = os.path.join(media_dir, filename)
+                        logger.info(f"检查media目录中的文件名: {media_path}")
+                        if os.path.isfile(media_path):
+                            actual = media_path
+                            logger.info(f"在media目录中找到图片: {actual}")
+                else:
+                    # 如果只是文件名，尝试在media目录中查找
+                    media_path = os.path.join(media_dir, os.path.basename(image_path))
+                    logger.info(f"检查media目录中的文件: {media_path}")
+                    if os.path.isfile(media_path):
+                        actual = media_path
+                        logger.info(f"在media目录中找到图片: {actual}")
+
+                # 最后尝试：检查嵌套的media/media目录
+                if actual is None:
+                    nested_media_path = os.path.join(media_dir, image_path)
+                    logger.info(f"检查嵌套media目录: {nested_media_path}")
+                    if os.path.isfile(nested_media_path):
+                        actual = nested_media_path
+                        logger.info(f"在嵌套media目录中找到图片: {actual}")
+
+                        # 将文件复制到正确的media目录
+                        correct_path = os.path.join(media_dir, os.path.basename(image_path))
+                        if correct_path != nested_media_path:
+                            import shutil
+                            shutil.copy2(nested_media_path, correct_path)
+                            logger.info(f"复制文件到正确位置: {nested_media_path} -> {correct_path}")
+                            actual = correct_path
+
             if actual is None:
-                self._add_paragraph(doc, f"[图片未找到] {image_path}")
+                logger.error(f"无法找到图片文件: {image_path}")
+                # 显示占位符而不是假链接
+                p = doc.add_paragraph()
+                run = p.add_run(f"[图片: {alt_text or '未命名图片'}]")
+                run.font.color.rgb = RGBColor(128, 128, 128)  # 灰色
                 return
+
+            logger.info(f"成功插入图片: {actual}")
             # 默认宽度 5 英寸，可扩展解析 title 指定尺寸
             doc.add_picture(actual, width=Inches(5))
             if alt_text:
@@ -250,7 +314,10 @@ class WordConverter:
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         except Exception as e:
             logger.error(f"插入图片失败: {str(e)}")
-            self._add_paragraph(doc, f"[图片插入失败] {image_path}")
+            # 显示占位符而不是假链接
+            p = doc.add_paragraph()
+            run = p.add_run(f"[图片加载失败: {alt_text or '未命名图片'}]")
+            run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
 
     def _preprocess_markdown_assets(self, markdown_content: str) -> str:
         """下载远程图片为本地 media 路径，并重写Markdown中的链接。"""
@@ -347,24 +414,86 @@ class WordConverter:
     def word_to_markdown(self, docx_path: str) -> str:
         """
         将Word文档（.docx）转换为简化的Markdown文本。
-        说明：为满足“在原文件上进行修改”的需求，将Word提取为Markdown，便于用大模型修改后再导出。
+        说明：为满足"在原文件上进行修改"的需求，将Word提取为Markdown，便于用大模型修改后再导出。
         """
         try:
             if not os.path.isfile(docx_path):
                 raise FileNotFoundError(f"文件不存在: {docx_path}")
             doc = Document(docx_path)
-            parts = []
-            for block in doc.element.body:
-                if block.tag.endswith('}p'):
-                    p = self._paragraph_to_markdown(block)
-                    if p is not None:
-                        parts.append(p)
-                elif block.tag.endswith('}tbl'):
-                    md_table = self._table_to_markdown(block)
-                    parts.append(md_table)
-            return "\n\n".join([p for p in parts if p is not None and str(p).strip() != ""])
+            return self._extract_content_from_doc(doc)
         except Exception as e:
             logger.error(f"Word 转 Markdown 失败: {str(e)}")
+            raise
+
+    def word_to_markdown_from_bytes(self, docx_bytes: bytes) -> str:
+        """
+        直接从字节数据将Word文档转换为Markdown文本，无需保存临时文件。
+
+        Args:
+            docx_bytes: Word文档的字节数据
+
+        Returns:
+            转换后的Markdown文本
+        """
+        try:
+            import tempfile
+            import os
+
+            # 创建临时文件
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
+                temp_file.write(docx_bytes)
+                temp_path = temp_file.name
+
+            try:
+                # 从临时文件加载文档
+                doc = Document(temp_path)
+                return self._extract_content_from_doc(doc)
+            finally:
+                # 确保删除临时文件
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
+        except Exception as e:
+            logger.error(f"从字节数据转换Word到Markdown失败: {str(e)}")
+            raise
+
+    def _extract_content_from_doc(self, doc) -> str:
+        """
+        从Document对象中提取所有内容并转换为Markdown
+
+        Args:
+            doc: python-docx的Document对象
+
+        Returns:
+            转换后的Markdown文本
+        """
+        try:
+            parts = []
+
+            # 提取所有段落
+            for paragraph in doc.paragraphs:
+                p_md = self._paragraph_to_markdown_full(paragraph)
+                if p_md and p_md.strip():
+                    parts.append(p_md)
+
+            # 提取所有表格
+            for table in doc.tables:
+                table_md = self._table_to_markdown_full(table)
+                if table_md and table_md.strip():
+                    parts.append(table_md)
+
+            # 提取文档中的图片（从XML中）
+            for block in doc.element.body:
+                if block.tag.endswith('}p'):
+                    image_md = self._extract_images_from_xml(block)
+                    if image_md and image_md.strip():
+                        parts.append(image_md)
+
+            return "\n\n".join(parts)
+        except Exception as e:
+            logger.error(f"从Document对象提取内容失败: {str(e)}")
             raise
 
     def word_to_markdown_pandoc(self, docx_path: str) -> str:
@@ -380,7 +509,7 @@ class WordConverter:
             os.makedirs(media_dir_abs, exist_ok=True)
             md = pypandoc.convert_file(
                 docx_path,
-                'gfm+pipe_tables+grid_tables+table_captions',
+                'markdown',
                 extra_args=[f"--extract-media={media_dir_abs}"]
             )
             # 规范化为相对 media 路径，避免绝对路径导致资源找不到
@@ -390,6 +519,54 @@ class WordConverter:
             logger.error(f"Pandoc 提取失败: {str(e)}，回退到简化提取")
             return self.word_to_markdown(docx_path)
 
+    def word_to_markdown_pandoc_from_bytes(self, docx_bytes: bytes) -> str:
+        """
+        使用Pandoc直接从字节数据将Word文档转换为Markdown，无需保存临时文件。
+
+        Args:
+            docx_bytes: Word文档的字节数据
+
+        Returns:
+            转换后的Markdown文本
+        """
+        try:
+            import pypandoc
+            import tempfile
+            import os
+
+            logger.info("使用 Pandoc 从字节数据提取 Word 为 Markdown...")
+
+            # 创建临时文件
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
+                temp_file.write(docx_bytes)
+                temp_path = temp_file.name
+
+            try:
+                # 将媒体资源提取到 output_dir/media，并将链接指向相对路径 media/xxx
+                media_dir_name = 'media'
+                media_dir_abs = os.path.join(self.output_dir, media_dir_name)
+                os.makedirs(media_dir_abs, exist_ok=True)
+
+                md = pypandoc.convert_file(
+                    temp_path,
+                    'markdown',
+                    extra_args=[f"--extract-media={media_dir_abs}"]
+                )
+
+                # 规范化为相对 media 路径，避免绝对路径导致资源找不到
+                normalized = md.replace(media_dir_abs.replace('\\','/'), media_dir_name)
+                return normalized
+            finally:
+                # 确保删除临时文件
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
+        except Exception as e:
+            logger.error(f"Pandoc 从字节数据提取失败: {str(e)}，回退到简化提取")
+            return self.word_to_markdown_from_bytes(docx_bytes)
+
     def has_pandoc(self) -> bool:
         try:
             import pypandoc
@@ -398,11 +575,9 @@ class WordConverter:
         except Exception:
             return False
 
-    def _paragraph_to_markdown(self, p_elm) -> str:
-        from docx.text.paragraph import Paragraph
-        from docx.oxml.ns import qn
+    def _paragraph_to_markdown_full(self, paragraph) -> str:
+        """完整处理段落转换为Markdown"""
         try:
-            paragraph = Paragraph(p_elm, None)
             # 检测图片：若段落包含图片，导出图片并返回图片Markdown
             image_md = self._extract_images_from_paragraph(paragraph)
             if image_md:
@@ -411,15 +586,17 @@ class WordConverter:
             text = paragraph.text or ""
             if text.strip() == "":
                 return ""
+
             # 标题映射
             style_name = (getattr(paragraph.style, 'name', '') or "").lower()
-            for level in range(1, 5):
+            for level in range(1, 6):
                 if f"heading {level}" in style_name:
                     return f"{'#' * level} {text}"
 
-            # 列表嵌套（简化）：根据 numPr/ilvl 生成缩进
+            # 处理列表项
             level = 0
             is_list = False
+            is_ordered = False
             try:
                 pPr = paragraph._p.pPr
                 if pPr is not None and pPr.numPr is not None:
@@ -427,13 +604,88 @@ class WordConverter:
                     ilvl = pPr.numPr.ilvl
                     if ilvl is not None and ilvl.val is not None:
                         level = int(ilvl.val)
+                    # 检查是否为有序列表
+                    numId = pPr.numPr.numId
+                    if numId is not None:
+                        # 简化判断：通常numId为1是无序列表，其他是有序列表
+                        is_ordered = str(numId.val) != "1"
             except Exception:
                 pass
+
             if is_list:
                 indent = "  " * max(0, level)
-                return f"{indent}- {text}"
+                prefix = "1. " if is_ordered else "- "
+                return f"{indent}{prefix}{text}"
+
+            # 处理引用样式
+            if "quote" in style_name:
+                return f"> {text}"
 
             return text
+        except Exception as e:
+            logger.warning(f"段落转换失败: {e}")
+            return paragraph.text if paragraph.text else ""
+
+    def _paragraph_to_markdown(self, p_elm) -> str:
+        from docx.text.paragraph import Paragraph
+        from docx.oxml.ns import qn
+        try:
+            paragraph = Paragraph(p_elm, None)
+            return self._paragraph_to_markdown_full(paragraph)
+        except Exception:
+            return ""
+
+    def _table_to_markdown_full(self, table) -> str:
+        """完整处理表格转换为Markdown"""
+        try:
+            rows = table.rows
+            if not rows:
+                return ""
+
+            # 构建表格Markdown
+            md_lines = []
+            for row_idx, row in enumerate(rows):
+                cells = []
+                for cell in row.cells:
+                    cell_text = self._clean_cell_text(cell.text)
+                    cells.append(cell_text)
+
+                if row_idx == 0:
+                    # 表头
+                    md_lines.append("| " + " | ".join(cells) + " |")
+                    # 分隔线
+                    separator = "| " + " | ".join(["---"] * len(cells)) + " |"
+                    md_lines.append(separator)
+                else:
+                    # 数据行
+                    md_lines.append("| " + " | ".join(cells) + " |")
+
+            return "\n".join(md_lines)
+        except Exception as e:
+            logger.warning(f"表格转换失败: {e}")
+            return ""
+
+    def _table_to_markdown(self, tbl_elm) -> str:
+        from docx.table import Table
+        try:
+            table = Table(tbl_elm, None)
+            return self._table_to_markdown_full(table)
+        except Exception:
+            return ""
+
+    def _clean_cell_text(self, text: str) -> str:
+        """清理表格单元格文本"""
+        if not text:
+            return ""
+        # 移除多余的换行符和空格
+        return " ".join(text.split()).strip()
+
+    def _extract_images_from_xml(self, block) -> str:
+        """从XML块中提取图片"""
+        try:
+            from docx.text.paragraph import Paragraph
+            paragraph = Paragraph(block, None)
+            return self._extract_images_from_paragraph(paragraph)
         except Exception:
             return ""
 

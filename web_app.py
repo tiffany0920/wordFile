@@ -51,6 +51,10 @@ def initialize_session_state():
         st.session_state.edit_md_text = ""
     if 'refresh_editor' not in st.session_state:
         st.session_state.refresh_editor = False
+    if 'markdown_filename' not in st.session_state:
+        st.session_state.markdown_filename = f"document_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    if 'word_filename' not in st.session_state:
+        st.session_state.word_filename = f"document_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 
 @st.cache_resource
@@ -127,20 +131,6 @@ def main():
         st.caption("默认存放生成的 Markdown 和 Word 文件")
 
         st.markdown("<hr style='margin:0.3rem 0;'>", unsafe_allow_html=True)
-        st.markdown("#### 📋 模板选择")
-
-        templates = {
-            "默认模板": "使用默认的通用模板",
-            "技术文档": "适合技术文档的模板",
-            "报告格式": "适合正式报告的模板",
-            "会议纪要": "适合会议纪要的模板"
-        }
-        selected_template = st.selectbox("选择模板", list(templates.keys()))
-        st.info(templates[selected_template])
-
-        st.markdown("<hr style='margin:0.3rem 0;'>", unsafe_allow_html=True)
-        edit_mode = st.toggle("✏️ 启用文档编辑模式", value=False)
-        st.caption("开启后可加载、修改、插入表格或图片")
     
     # ======================
     # 主体内容区域（两个标签页）
@@ -163,29 +153,95 @@ def main():
                 input_content = str(uploaded_file.read(), "utf-8")
                 st.success(f"已上传文件: {uploaded_file.name}")
 
-        # 自定义提示词
-        st.subheader("🎯 自定义提示词 (可选)")
-        use_custom_prompt = st.checkbox("使用自定义提示词")
+        # 模板选择
+        st.subheader("📋 模板选择")
+        template_mode = st.radio(
+            "选择模板类型",
+            ["使用预设模板", "自定义提示词"],
+            horizontal=True
+        )
+
         custom_prompt = None
-        if use_custom_prompt:
+        if template_mode == "使用预设模板":
+            templates = {
+                "默认模板": {
+                    "description": "使用默认的通用模板，适合一般文档转换",
+                    "prompt": Config.DEFAULT_PROMPT_TEMPLATE
+                },
+                "技术文档": {
+                    "description": "适合技术文档的模板，包含技术规范和结构化内容",
+                    "prompt": """
+请将以下内容转换为技术文档格式的Markdown：
+
+输入内容：{input_content}
+
+要求：
+1. 使用清晰的技术文档结构
+2. 包含目录、概述、详细说明等部分
+3. 使用代码块、表格等格式
+4. 确保技术术语准确
+"""
+                },
+                "报告格式": {
+                    "description": "适合正式报告的模板，包含规范的报告结构",
+                    "prompt": """
+请将以下内容转换为正式报告格式的Markdown：
+
+输入内容：{input_content}
+
+要求：
+1. 使用正式的报告结构
+2. 包含摘要、正文、结论等部分
+3. 使用适当的标题层级
+4. 确保内容逻辑清晰
+"""
+                },
+                "会议纪要": {
+                    "description": "适合会议纪要的模板，包含会议要素和时间线",
+                    "prompt": """
+请将以下内容转换为会议纪要格式的Markdown：
+
+输入内容：{input_content}
+
+要求：
+1. 使用会议纪要的标准格式
+2. 包含会议信息、参会人员、议题、决议等
+3. 使用列表和表格整理信息
+4. 确保时间线清晰
+"""
+                }
+            }
+
+            selected_template = st.selectbox("选择预设模板", list(templates.keys()))
+            st.info(templates[selected_template]["description"])
+            custom_prompt = templates[selected_template]["prompt"]
+
+        else:
             custom_prompt = st.text_area(
                 "自定义提示词：",
-                height=120,
-                placeholder="使用 {input_content} 作为输入占位符"
+                height=300,
+                placeholder="使用 {input_content} 作为输入占位符\n\n示例：\n请将以下内容转换为规范的Markdown文档：\n\n输入内容：{input_content}\n\n要求：\n1. 结构清晰\n2. 格式规范\n3. 内容完整"
             )
 
         st.markdown("---")
         st.subheader("⚙️ 输出设置")
+
+        # 初始化文件名在session state中
+        if 'markdown_filename' not in st.session_state:
+            st.session_state.markdown_filename = f"document_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if 'word_filename' not in st.session_state:
+            st.session_state.word_filename = f"document_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
         col1, col2 = st.columns(2)
         with col1:
             markdown_filename = st.text_input(
-                "Markdown文件名",
-                value=f"document_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+                "Markdown文件名（不含扩展名）",
+                key="markdown_filename"
             )
         with col2:
             word_filename = st.text_input(
-                "Word文件名",
-                value=f"document_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                "Word文件名（不含扩展名）",
+                key="word_filename"
             )
 
         # 生成按钮
@@ -202,22 +258,25 @@ def main():
                 with st.spinner("正在生成文档..."):
                     generator = get_generator()
                     use_hq = st.checkbox("使用高保真导出(Pandoc)", value=True)
+
+                    # 生成Markdown内容
+                    md_content, md_path = generator.markdown_generator.generate_from_content(
+                        input_content, custom_prompt, markdown_filename
+                    )
+
+                    # 根据用户选择生成Word文档（只生成一个）
                     if use_hq:
-                        md_content, md_path = generator.markdown_generator.generate_from_content(
-                            input_content, custom_prompt, markdown_filename
-                        )
                         conv = WordConverter()
                         word_path = conv.markdown_to_word_pandoc(md_content, word_filename)
-                        result = {
-                            'success': True,
-                            'markdown_content': md_content,
-                            'markdown_path': md_path,
-                            'word_path': word_path,
-                        }
                     else:
-                        result = generator.generate_document(
-                            input_content, custom_prompt, markdown_filename, word_filename
-                        )
+                        word_path = generator.word_converter.markdown_to_word(md_content, word_filename)
+
+                    result = {
+                        'success': True,
+                        'markdown_content': md_content,
+                        'markdown_path': md_path,
+                        'word_path': word_path,
+                    }
 
                 if result['success']:
                     st.success("✅ 文档生成成功！")
@@ -288,18 +347,21 @@ def main():
             st.rerun()
 
         if docx_file and st.button("提取为 Markdown"):
-            os.makedirs(Config.OUTPUT_DIR, exist_ok=True)
-            tmp_path = os.path.join(Config.OUTPUT_DIR, f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx")
-            with open(tmp_path, 'wb') as f:
-                f.write(docx_file.read())
-            if extract_mode == "高保真(Pandoc)" and effective_pandoc:
-                extracted_md = conv.word_to_markdown_pandoc(tmp_path)
-            else:
-                extracted_md = conv.word_to_markdown(tmp_path)
-            st.session_state["edit_md_content"] = extracted_md
-            st.session_state["refresh_editor"] = True
-            st.success("已提取并载入到编辑器")
-            st.rerun()
+            try:
+                # 直接从上传的文件对象读取字节数据，无需保存临时文件
+                docx_bytes = docx_file.read()
+
+                if extract_mode == "高保真(Pandoc)" and effective_pandoc:
+                    extracted_md = conv.word_to_markdown_pandoc_from_bytes(docx_bytes)
+                else:
+                    extracted_md = conv.word_to_markdown_from_bytes(docx_bytes)
+
+                st.session_state["edit_md_content"] = extracted_md
+                st.session_state["refresh_editor"] = True
+                st.success("已提取并载入到编辑器")
+                st.rerun()
+            except Exception as e:
+                st.error(f"文档提取失败: {str(e)}")
 
         # 同步编辑区刷新
         if st.session_state.get("refresh_editor", False):
@@ -307,13 +369,19 @@ def main():
             st.session_state["refresh_editor"] = False
 
         # 编辑器显示
+        if "edit_md_text" not in st.session_state:
+            st.session_state["edit_md_text"] = st.session_state.get("edit_md_content", "")
+
         st.text_area(
             "Markdown 内容编辑区",
-            value=st.session_state.get("edit_md_content", ""),
             key="edit_md_text",
             height=300
         )
-        st.session_state["edit_md_content"] = st.session_state.get("edit_md_text", "")
+
+        # 实时同步编辑器内容
+        current_editor_content = st.session_state.get("edit_md_text", "")
+        if current_editor_content != st.session_state.get("edit_md_content", ""):
+            st.session_state["edit_md_content"] = current_editor_content
 
         # ======== 插图与表格 ========
         st.markdown("---")
@@ -328,9 +396,23 @@ def main():
                 media_dir = os.path.join(Config.OUTPUT_DIR, 'media')
                 os.makedirs(media_dir, exist_ok=True)
                 save_path = os.path.join(media_dir, img.name)
+
+                # 确保文件名是唯一的，避免覆盖
+                counter = 1
+                original_name = img.name
+                while os.path.exists(save_path):
+                    name, ext = os.path.splitext(original_name)
+                    save_path = os.path.join(media_dir, f"{name}_{counter}{ext}")
+                    counter += 1
+
                 with open(save_path, 'wb') as f:
                     f.write(img.read())
-                st.session_state["edit_md_content"] += f"\n\n![{os.path.splitext(img.name)[0]}](media/{img.name})\n"
+
+                # 生成正确的相对路径（始终使用 media/filename 格式）
+                filename = os.path.basename(save_path)
+                relative_path = f"media/{filename}"
+
+                st.session_state["edit_md_content"] += f"\n\n![{os.path.splitext(filename)[0]}]({relative_path})\n"
                 st.session_state["refresh_editor"] = True
                 st.success("已插入图片")
                 st.rerun()
@@ -349,20 +431,65 @@ def main():
         # ======== 修订与导出 ========
         st.markdown("---")
         st.subheader("🛠️ 修订与导出")
-        instruction = st.text_area("修订指令：", placeholder="例如：优化措辞，增加‘风险评估’一节", height=100)
-        if st.button("提交修订并生成新版本"):
+
+        # 添加导出选项
+        export_mode = st.radio(
+            "导出方式",
+            ["AI修订后导出", "直接导出当前内容"],
+            horizontal=True
+        )
+
+        if export_mode == "AI修订后导出":
+            instruction = st.text_area("修订指令：", placeholder="例如：优化措辞，增加'风险评估'一节", height=100)
+            submit_button = st.button("🤖 提交修订并生成新版本", type="primary")
+        else:
+            instruction = ""
+            submit_button = st.button("💾 直接导出当前内容", type="primary")
+
+        if submit_button:
             try:
                 if not st.session_state["edit_md_text"].strip():
                     st.error("编辑器内容为空")
                     st.stop()
-                client = LLMClient()
-                revised_md = client.revise_markdown(st.session_state["edit_md_text"], instruction)
+
+                # 显示当前内容用于调试
+                logger.info("当前编辑器内容:")
+                logger.info(st.session_state["edit_md_text"])
+
+                # 复制媒体文件以确保修订版本中的图片可用
+                _ensure_media_files_available(st.session_state["edit_md_text"])
+
+                if export_mode == "AI修订后导出":
+                    # AI修订模式
+                    client = LLMClient()
+                    revised_md = client.revise_markdown(st.session_state["edit_md_text"], instruction)
+
+                    # 显示修订后的内容用于调试
+                    logger.info("修订后的内容:")
+                    logger.info(revised_md)
+
+                    # 再次复制媒体文件，因为修订后的内容可能包含新的图片
+                    _ensure_media_files_available(revised_md)
+                else:
+                    # 直接导出模式
+                    revised_md = st.session_state["edit_md_text"]
+                    logger.info("直接导出当前内容，无需AI修订")
+
+                # 显示输出目录结构
+                _debug_directory_structure()
+
                 generator = get_generator()
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 md_path = generator.markdown_generator.save_markdown(
-                    revised_md, f"revised_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+                    revised_md, f"revised_{timestamp}.md"
                 )
-                word_path = generator.word_converter.markdown_to_word(revised_md, None)
-                st.success("已生成修订版本")
+                word_path = generator.word_converter.markdown_to_word(revised_md, f"revised_{timestamp}.docx")
+
+                if export_mode == "AI修订后导出":
+                    st.success("✅ 已生成修订版本")
+                else:
+                    st.success("✅ 已直接导出当前内容")
+
                 st.session_state["edit_md_content"] = revised_md
                 st.session_state["refresh_editor"] = True
                 st.session_state.generated_files_edit.append({
@@ -373,7 +500,7 @@ def main():
                 })
                 st.rerun()
             except Exception as e:
-                st.error(f"修订失败：{e}")
+                st.error(f"导出失败：{e}")
 
         # ======== 历史与回滚 ========
         st.markdown("---")
@@ -391,6 +518,102 @@ def main():
                         st.session_state['refresh_editor'] = True
                         st.success("✅ 已回滚到该版本")
                         st.rerun()
+
+
+def _ensure_media_files_available(markdown_content: str):
+    """
+    确保Markdown中引用的媒体文件在输出目录的media文件夹中可用
+    这个函数用于处理修订版本中的图片引用问题
+    """
+    try:
+        import re
+        import os
+        import shutil
+
+        logger.info("开始检查媒体文件可用性...")
+
+        # 提取所有图片路径
+        img_pattern = re.compile(r'!\[(?:[^\]]*)\]\(([^)]+)\)')
+        matches = img_pattern.findall(markdown_content)
+
+        logger.info(f"找到 {len(matches)} 个图片引用: {matches}")
+
+        media_dir = os.path.join(Config.OUTPUT_DIR, 'media')
+        os.makedirs(media_dir, exist_ok=True)
+        logger.info(f"媒体目录: {media_dir}")
+
+        for img_path in matches:
+            logger.info(f"处理图片引用: {img_path}")
+
+            # 跳过URL
+            if img_path.startswith('http://') or img_path.startswith('https://'):
+                logger.info(f"跳过URL图片: {img_path}")
+                continue
+
+            # 如果是相对路径，尝试复制文件到media目录
+            if not os.path.isabs(img_path):
+                source_path = None
+                target_filename = None
+
+                # 检查是否已经在media目录中
+                if img_path.startswith('media/'):
+                    source_path = os.path.join(Config.OUTPUT_DIR, img_path)
+                    target_filename = os.path.basename(img_path)
+                    logger.info(f"检查media格式路径: {source_path}")
+                else:
+                    # 检查是否在输出目录根目录
+                    source_path = os.path.join(Config.OUTPUT_DIR, img_path)
+                    target_filename = os.path.basename(img_path)
+                    logger.info(f"检查根目录路径: {source_path}")
+
+                # 检查是否在嵌套的media/media目录中
+                if source_path and not os.path.isfile(source_path):
+                    nested_media_path = os.path.join(Config.OUTPUT_DIR, 'media', img_path)
+                    if os.path.isfile(nested_media_path):
+                        source_path = nested_media_path
+                        logger.info(f"找到嵌套media目录中的文件: {source_path}")
+
+                if source_path and os.path.isfile(source_path):
+                    # 确保文件在media目录中（不是嵌套的）
+                    target_path = os.path.join(media_dir, target_filename)
+
+                    logger.info(f"源文件存在: {source_path}")
+
+                    if not os.path.isfile(target_path):
+                        shutil.copy2(source_path, target_path)
+                        logger.info(f"复制媒体文件: {source_path} -> {target_path}")
+                    else:
+                        logger.info(f"媒体文件已存在: {target_path}")
+                else:
+                    logger.warning(f"找不到源文件: {source_path}")
+
+    except Exception as e:
+        logger.warning(f"确保媒体文件可用时出错: {e}")
+
+
+def _debug_directory_structure():
+    """调试输出目录结构"""
+    try:
+        import os
+        logger.info("=== 目录结构调试 ===")
+        logger.info(f"输出目录: {Config.OUTPUT_DIR}")
+
+        if os.path.exists(Config.OUTPUT_DIR):
+            logger.info("输出目录存在")
+            for root, dirs, files in os.walk(Config.OUTPUT_DIR):
+                level = root.replace(Config.OUTPUT_DIR, '').count(os.sep)
+                indent = ' ' * 2 * level
+                logger.info(f"{indent}{os.path.basename(root)}/")
+                subindent = ' ' * 2 * (level + 1)
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    logger.info(f"{subindent}{file} (存在: {os.path.isfile(file_path)})")
+        else:
+            logger.warning("输出目录不存在")
+
+        logger.info("=== 目录结构调试结束 ===")
+    except Exception as e:
+        logger.warning(f"调试目录结构时出错: {e}")
 
 
 # ======================
