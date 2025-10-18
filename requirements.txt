@@ -1,7 +1,22 @@
-openai>=1.0.0
-python-docx>=0.8.11
-markdown>=3.4.4
-pypandoc>=1.11
-python-dotenv>=1.0.0
-streamlit>=1.28.0
-Pillow>=9.5.0
+# 智能文档生成器依赖包清单
+# 基于通义千问大模型的智能文档生成系统
+
+# 核心依赖 - 通义千问API客户端
+openai>=1.0.0              # OpenAI兼容API客户端，用于调用通义千问大模型
+
+# 文档处理核心库
+python-docx>=0.8.11         # Word文档创建和操作库
+markdown>=3.4.4             # Markdown解析和处理库
+pypandoc>=1.11              # 高质量文档转换引擎（可选，用于高保真转换）
+
+# Web界面框架
+streamlit>=1.28.0           # 现代化Web应用框架
+Pillow>=9.5.0               # 图像处理库，支持图片插入和处理
+
+# 配置和工具
+python-dotenv>=1.0.0        # 环境变量管理库
+requests>=2.28.0            # HTTP请求库，用于API调用
+
+# 可选依赖 - 用于增强功能
+# python-magic>=0.4.27      # 文件类型检测（可选）
+# watchdog>=2.1.0           # 文件监控（可选）

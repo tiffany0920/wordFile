@@ -10,28 +10,28 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class MarkdownGenerator:
-    """Markdown生成器类"""
+    """智能文档生成器的Markdown生成器类，负责通过LLM生成结构化的Markdown内容"""
     
     def __init__(self):
-        """初始化Markdown生成器"""
+        """初始化智能文档生成器的Markdown生成器"""
         self.llm_client = LLMClient()
         self.output_dir = Config.OUTPUT_DIR
         
         # 确保输出目录存在
         os.makedirs(self.output_dir, exist_ok=True)
     
-    def generate_from_content(self, input_content: str, custom_prompt: Optional[str] = None, 
+    def generate_from_content(self, input_content: str, custom_prompt: Optional[str] = None,
                             filename: Optional[str] = None) -> tuple[str, str]:
         """
-        根据输入内容生成Markdown文档
-        
+        智能文档生成器核心功能：根据输入内容通过LLM生成结构化的Markdown文档
+
         Args:
-            input_content: 输入的内容
-            custom_prompt: 自定义提示词
-            filename: 指定的文件名，如果为None则自动生成
-            
+            input_content: 用户输入的原始内容，将被LLM转换为结构化文档
+            custom_prompt: 自定义提示词模板（可选），用于定制生成风格和格式
+            filename: 指定输出Markdown文件名（可选），默认自动生成带时间戳的文件名
+
         Returns:
-            (markdown_content, file_path) 元组
+            (markdown_content, file_path) 元组，包含生成的Markdown内容和保存的文件路径
         """
         try:
             logger.info("开始生成Markdown内容...")
@@ -63,14 +63,14 @@ class MarkdownGenerator:
     
     def save_markdown(self, markdown_content: str, filename: str) -> str:
         """
-        保存Markdown内容到文件
-        
+        智能文档生成器辅助功能：将Markdown内容保存到文件
+
         Args:
-            markdown_content: Markdown内容
-            filename: 文件名
-            
+            markdown_content: 要保存的Markdown格式内容
+            filename: 目标文件名（会自动添加.md扩展名）
+
         Returns:
-            保存的文件路径
+            保存后的完整文件路径
         """
         try:
             if not filename.endswith('.md'):
@@ -90,10 +90,10 @@ class MarkdownGenerator:
     
     def get_available_templates(self) -> dict:
         """
-        获取可用的提示词模板
-        
+        智能文档生成器模板管理功能：获取所有可用的文档生成提示词模板
+
         Returns:
-            模板字典
+            包含各种文档类型的提示词模板字典，如技术文档、报告格式、会议纪要等
         """
         templates = {
             "默认模板": Config.DEFAULT_PROMPT_TEMPLATE,

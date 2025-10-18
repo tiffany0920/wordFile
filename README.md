@@ -1,15 +1,18 @@
 # 智能文档生成器
 
-一个基于大模型的智能文档生成工具，能够根据输入内容生成结构化的Markdown文档，并自动转换为Word格式。
+一个基于通义千问大模型的智能文档生成系统，能够根据输入内容智能生成结构化的Markdown文档，并自动转换为Word格式。支持文档编辑、双向转换、媒体资源管理等高级功能。
 
-## 功能特性
+## 🌟 核心功能特性
 
-- 🤖 **智能内容生成**: 使用通义千问（DashScope OpenAI兼容接口）将任意内容转换为结构化Markdown
-- 📝 **多格式输出**: 同时生成Markdown和Word两种格式
-- 🎯 **自定义模板**: 支持多种预设模板和自定义提示词
-- 🌐 **Web界面**: 提供现代化的Streamlit Web界面
-- 💻 **命令行界面**: 支持命令行交互式操作
-- 📁 **文件管理**: 自动管理输出文件和目录
+- 🤖 **智能文档生成**: 集成通义千问大模型（DashScope API），将任意内容智能转换为结构化Markdown文档
+- 📝 **多格式支持**: 同时生成Markdown和Word文档，支持双向转换（Word ↔ Markdown）
+- 🎯 **专业模板系统**: 内置技术文档、报告格式、会议纪要等多种专业模板，支持自定义提示词
+- 🌐 **现代化Web界面**: 基于Streamlit的直观Web界面，支持文件上传、实时预览、版本管理
+- 💻 **命令行工具**: 功能完整的命令行界面，支持脚本化和批量处理
+- 🔄 **文档编辑修订**: 支持上传现有文档进行AI辅助编辑和智能修订
+- 🖼️ **媒体资源管理**: 自动处理图片插入、路径管理和资源同步
+- 📚 **版本历史管理**: 独立的生成和编辑历史记录，支持版本回滚和比较
+- 🛠️ **高保真转换**: 集成Pandoc引擎，提供专业级的文档格式转换质量
 
 ## 安装说明
 
@@ -30,17 +33,21 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # 编辑 .env 文件，填入您的通义千问（DashScope）API密钥
-# 新变量（推荐）
+# 主要配置（推荐）
 DASHSCOPE_API_KEY=your_dashscope_api_key_here
 QWEN_MODEL=qwen-turbo
-# 可选：如需自定义OpenAI兼容Base URL
-# OPENAI_COMPAT_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+OPENAI_COMPAT_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+OUTPUT_DIR=output
 
-# 兼容旧变量（可选，用于平滑迁移）：
+# 兼容性配置（自动回退支持）
 # OPENAI_API_KEY=your_dashscope_api_key_here
 # OPENAI_MODEL=qwen-turbo
-OUTPUT_DIR=output
 ```
+
+**📌 获取API密钥**：
+- 访问 [阿里云DashScope控制台](https://dashscope.console.aliyun.com/)
+- 注册/登录阿里云账号
+- 开通DashScope服务并获取API密钥
 
 ## 使用方法
 
@@ -76,38 +83,68 @@ intelligent-document-generator/
 └── output/               # 输出目录
 ```
 
-## 核心组件
+## 🏗️ 核心架构组件
 
-### 1. LLMClient (llm_client.py)
-- 负责与通义千问（DashScope OpenAI兼容协议）通信
-- 支持通义千问模型（例如：qwen-turbo 等）
-- 提供连接测试功能
+### 1. LLMClient (llm_client.py) - 智能处理核心
+- **通义千问集成**: 通过DashScope OpenAI兼容协议与通义千问大模型通信
+- **模型支持**: 支持qwen-turbo、qwen-plus、qwen-max等多种通义千问模型
+- **智能编辑**: 提供文档修订和内容增强功能
+- **连接管理**: 自动连接测试和错误恢复机制
 
-### 2. MarkdownGenerator (markdown_generator.py)
-- 调用大模型生成Markdown内容
-- 支持多种预设模板
-- 自动文件命名和保存
+### 2. MarkdownGenerator (markdown_generator.py) - 内容生成引擎
+- **智能生成**: 调用通义千问LLM生成高质量Markdown内容
+- **模板系统**: 内置技术文档、报告、会议纪要等专业模板
+- **文件管理**: 自动文件命名、版本管理和目录组织
 
-### 3. WordConverter (word_converter.py)
-- 将Markdown转换为Word文档
-- 支持标题、列表、表格等格式
-- 保持文档结构完整性
+### 3. WordConverter (word_converter.py) - 格式转换中心
+- **双向转换**: 支持Markdown ↔ Word文档的双向转换
+- **高保真输出**: 集成Pandoc引擎，提供专业级转换质量
+- **媒体处理**: 自动处理图片、表格等复杂元素的转换
+- **格式保持**: 完整保留文档结构、样式和格式
 
-## 模板系统
+### 4. Web界面 (web_app.py) - 现代化交互平台
+- **双标签设计**: 独立的"生成新文档"和"修改文档"工作区
+- **文件处理**: 支持拖拽上传、在线编辑、实时预览
+- **媒体管理**: 图片插入、表格创建、资源同步
+- **版本控制**: 历史记录、版本回滚、变更追踪
 
-系统内置多种模板：
+## 📋 专业模板系统
 
-1. **默认模板**: 通用文档格式
-2. **技术文档**: 适合技术文档的结构
-3. **报告格式**: 正式报告格式
-4. **会议纪要**: 会议记录格式
+智能文档生成器内置多种专业模板，适用于不同场景：
 
-## 配置选项
+### 🏢 企业文档模板
+1. **默认模板**: 通用业务文档格式，适用于日常办公需求
+2. **报告格式**: 标准企业报告结构，包含摘要、正文、结论等部分
+3. **会议纪要**: 专业会议记录格式，包含参会人员、议题、决议等要素
 
-### 环境变量
-- `OPENAI_API_KEY`: OpenAI API密钥（必需）
-- `OPENAI_MODEL`: 使用的模型（默认：gpt-3.5-turbo）
-- `OUTPUT_DIR`: 输出目录（默认：output）
+### 🛠️ 技术文档模板
+4. **技术文档**: 面向开发者和工程师的技术规范文档
+   - 清晰的技术文档结构
+   - 代码块和表格支持
+   - API文档格式优化
+
+### 🎨 自定义模板
+- **灵活定制**: 支持用户自定义提示词模板
+- **占位符系统**: 使用 `{input_content}` 作为内容占位符
+- **格式控制**: 精确控制输出格式和结构
+
+## ⚙️ 配置选项
+
+### 环境变量配置
+- `DASHSCOPE_API_KEY`: 通义千问API密钥（**必需**）
+- `QWEN_MODEL`: 使用的通义千问模型（默认：qwen-turbo）
+- `OPENAI_COMPAT_BASE_URL`: DashScope OpenAI兼容接口地址
+- `OUTPUT_DIR`: 文档输出目录（默认：output）
+
+### 支持的通义千问模型
+- **qwen-turbo**: 快速响应，适合一般文档生成
+- **qwen-plus**: 平衡性能和质量，推荐日常使用
+- **qwen-max**: 最高质量输出，适合重要文档
+
+### 兼容性配置
+系统支持以下环境变量作为备选（自动回退机制）：
+- `OPENAI_API_KEY`: 兼容旧配置
+- `OPENAI_MODEL`: 兼容旧模型配置
 
 ### 自定义提示词
 支持使用自定义提示词模板，使用 `{input_content}` 作为输入内容的占位符。
@@ -124,21 +161,42 @@ intelligent-document-generator/
 - 保持Markdown的结构和格式
 - 支持标题样式、列表、表格等
 
-## 故障排除
+## 🔧 故障排除
 
-### 常见问题
+### 常见问题解决方案
 
-1. **API密钥错误**
-   - 确保在.env文件中正确设置了OPENAI_API_KEY
-   - 检查API密钥是否有效且有足够额度
+1. **🔑 API密钥相关问题**
+   - **问题**: API密钥无效或未配置
+   - **解决**:
+     - 确保在.env文件中正确设置了 `DASHSCOPE_API_KEY`
+     - 访问 [DashScope控制台](https://dashscope.console.aliyun.com/) 确认API密钥状态
+     - 检查账户余额和API调用额度
 
-2. **依赖安装失败**
-   - 确保Python版本 >= 3.8
-   - 使用虚拟环境：`python -m venv venv && source venv/bin/activate`
+2. **📦 依赖安装问题**
+   - **问题**: pip安装依赖失败
+   - **解决**:
+     - 确保Python版本 >= 3.8
+     - 使用虚拟环境：`python -m venv venv && source venv/bin/activate`
+     - 升级pip：`pip install --upgrade pip`
 
-3. **文件权限错误**
-   - 确保对输出目录有写权限
-   - 检查磁盘空间是否充足
+3. **📁 文件和权限问题**
+   - **问题**: 无法创建输出文件
+   - **解决**:
+     - 确保对输出目录有写权限
+     - 检查磁盘空间是否充足
+     - 创建输出目录：`mkdir -p output`
+
+4. **🌐 网络连接问题**
+   - **问题**: 无法连接到DashScope API
+   - **解决**:
+     - 检查网络连接和防火墙设置
+     - 确认API地址可访问：`curl https://dashscope.aliyuncs.com`
+
+5. **🔄 Pandoc转换问题**
+   - **问题**: 高保真转换失败
+   - **解决**:
+     - 安装Pandoc：[官方下载页面](https://pandoc.org/installing.html)
+     - 系统会自动回退到内置转换器
 
 ### 日志查看
 程序运行时会输出详细的日志信息，包括：

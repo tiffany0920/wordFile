@@ -8,10 +8,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class LLMClient:
-    """大模型客户端类"""
+    """智能文档生成器的LLM客户端类，负责与通义千问大模型进行交互以生成和修改文档内容"""
     
     def __init__(self):
-        """初始化LLM客户端"""
+        """初始化智能文档生成器的LLM客户端，配置通义千问API连接"""
         if not Config.DASHSCOPE_API_KEY:
             raise ValueError("请设置DASHSCOPE_API_KEY环境变量（兼容OPENAI_API_KEY）")
 
@@ -24,14 +24,14 @@ class LLMClient:
     
     def generate_markdown(self, input_content: str, custom_prompt: Optional[str] = None) -> str:
         """
-        根据输入内容生成Markdown格式文档
-        
+        智能文档生成器核心LLM功能：根据输入内容生成结构化的Markdown格式文档
+
         Args:
-            input_content: 输入的内容
-            custom_prompt: 自定义提示词，如果为None则使用默认模板
-            
+            input_content: 用户输入的原始内容，将被LLM转换为结构化文档
+            custom_prompt: 自定义提示词模板（可选），如果为None则使用默认的通用模板
+
         Returns:
-            生成的Markdown内容
+            通义千问生成的结构化Markdown格式内容
         """
         try:
             # 使用自定义提示词或默认模板
@@ -63,10 +63,10 @@ class LLMClient:
     
     def test_connection(self) -> bool:
         """
-        测试与通义千问（DashScope OpenAI兼容接口）的连接
-        
+        智能文档生成器连接测试功能：验证与通义千问（DashScope OpenAI兼容接口）的连接状态
+
         Returns:
-            连接是否成功
+            bool: 连接成功返回True，失败返回False
         """
         try:
             response = self.client.chat.completions.create(
@@ -81,15 +81,16 @@ class LLMClient:
             return False
 
     def revise_markdown(self, existing_markdown: str, instruction: str, model: Optional[str] = None) -> str:
-        """根据用户指令在原有Markdown基础上进行修改并返回新Markdown。
+        """
+        智能文档生成器文档编辑功能：根据用户指令在原有Markdown基础上进行智能修改
 
         Args:
-            existing_markdown: 现有的Markdown内容
-            instruction: 修改说明，如“优化措辞，保留结构，添加一节风险评估”等
-            model: 可选，指定覆盖默认模型
+            existing_markdown: 现有的Markdown格式文档内容
+            instruction: 修改指令说明，如"优化措辞，保留结构，添加一节风险评估"等
+            model: 可选，指定覆盖默认的通义千问模型
 
         Returns:
-            修改后的Markdown内容
+            修改后的完整Markdown内容
         """
         try:
             used_model = model or self.model

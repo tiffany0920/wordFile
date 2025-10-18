@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-智能文档生成器主程序
-支持根据输入内容生成Markdown，并转换为Word文档
+智能文档生成器命令行主程序
+核心功能：通过通义千问LLM根据输入内容智能生成结构化Markdown文档，并自动转换为Word格式
+支持多种文档模板、自定义提示词、批量处理等高级功能
 """
 
 import os
@@ -21,10 +22,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class DocumentGenerator:
-    """智能文档生成器主类"""
+    """智能文档生成器主类，整合文档生成、转换和系统测试功能"""
     
     def __init__(self):
-        """初始化文档生成器"""
+        """初始化智能文档生成器，配置各个功能模块"""
         self.markdown_generator = MarkdownGenerator()
         self.word_converter = WordConverter()
         self.llm_client = LLMClient()
@@ -33,16 +34,16 @@ class DocumentGenerator:
                          markdown_filename: Optional[str] = None,
                          word_filename: Optional[str] = None) -> dict:
         """
-        生成完整文档（Markdown + Word）
-        
+        智能文档生成器核心功能：生成完整的文档（Markdown + Word）
+
         Args:
-            input_content: 输入内容
-            custom_prompt: 自定义提示词
-            markdown_filename: Markdown文件名
-            word_filename: Word文件名
-            
+            input_content: 用户输入的原始内容，将被LLM智能转换为结构化文档
+            custom_prompt: 自定义提示词模板（可选），用于定制生成风格和文档类型
+            markdown_filename: 生成的Markdown文件名（可选），默认自动生成
+            word_filename: 生成的Word文件名（可选），默认自动生成
+
         Returns:
-            包含生成文件路径的字典
+            包含生成状态、文件路径和内容的完整信息字典
         """
         try:
             logger.info("开始生成文档...")
@@ -77,7 +78,7 @@ class DocumentGenerator:
             }
     
     def test_system(self) -> bool:
-        """测试系统功能"""
+        """智能文档生成器系统自检功能：测试所有核心组件是否正常工作"""
         try:
             logger.info("测试系统功能...")
             
@@ -102,7 +103,7 @@ class DocumentGenerator:
             return False
 
 def main():
-    """主函数"""
+    """智能文档生成器命令行界面主函数"""
     print("=" * 60)
     print("智能文档生成器")
     print("=" * 60)

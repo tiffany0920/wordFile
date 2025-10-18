@@ -18,23 +18,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class WordConverter:
-    """Markdown到Word转换器类"""
+    """智能文档生成器的Word转换器类，支持Markdown与Word文档的双向转换"""
     
     def __init__(self):
-        """初始化Word转换器"""
+        """初始化智能文档生成器的Word转换器"""
         self.output_dir = Config.OUTPUT_DIR
         os.makedirs(self.output_dir, exist_ok=True)
     
     def markdown_to_word(self, markdown_content: str, output_filename: Optional[str] = None) -> str:
         """
-        将Markdown内容转换为Word文档
+        智能文档生成器核心功能：将Markdown内容转换为Word文档
 
         Args:
-            markdown_content: Markdown内容
-            output_filename: 输出文件名
+            markdown_content: 要转换的Markdown格式内容
+            output_filename: 输出Word文件名（可选，默认自动生成）
 
         Returns:
-            生成的Word文件路径
+            生成的Word文档完整路径
         """
         try:
             logger.info("开始转换Markdown到Word...")
@@ -116,7 +116,10 @@ class WordConverter:
             raise Exception(f"转换Markdown到Word失败: {str(e)}")
 
     def markdown_to_word_pandoc(self, markdown_content: str, output_filename: Optional[str] = None) -> str:
-        """使用 Pandoc 高保真将 Markdown 转换为 Word。"""
+        """
+        智能文档生成器高保真转换功能：使用Pandoc将Markdown转换为Word文档
+        提供比内置转换器更高质量的转换结果，支持复杂格式和媒体资源
+        """
         try:
             import pypandoc
             logger.info("使用 Pandoc 将 Markdown 转为 Word...")
@@ -390,14 +393,14 @@ class WordConverter:
     
     def convert_file(self, markdown_file_path: str, output_filename: Optional[str] = None) -> str:
         """
-        转换Markdown文件到Word文档
-        
+        智能文档生成器文件转换功能：将Markdown文件直接转换为Word文档
+
         Args:
-            markdown_file_path: Markdown文件路径
-            output_filename: 输出文件名
-            
+            markdown_file_path: 输入的Markdown文件路径
+            output_filename: 输出Word文件名（可选）
+
         Returns:
-            生成的Word文件路径
+            生成的Word文档完整路径
         """
         try:
             # 读取Markdown文件
@@ -413,8 +416,8 @@ class WordConverter:
 
     def word_to_markdown(self, docx_path: str) -> str:
         """
-        将Word文档（.docx）转换为简化的Markdown文本。
-        说明：为满足"在原文件上进行修改"的需求，将Word提取为Markdown，便于用大模型修改后再导出。
+        智能文档生成器逆向转换功能：将Word文档(.docx)转换为Markdown文本
+        为支持文档编辑修改功能，将Word提取为Markdown格式，便于LLM修改后再重新导出为Word
         """
         try:
             if not os.path.isfile(docx_path):
@@ -427,13 +430,14 @@ class WordConverter:
 
     def word_to_markdown_from_bytes(self, docx_bytes: bytes) -> str:
         """
-        直接从字节数据将Word文档转换为Markdown文本，无需保存临时文件。
+        智能文档生成器高级转换功能：直接从字节数据将Word文档转换为Markdown
+        支持Web界面文件上传场景，无需保存临时文件即可进行转换
 
         Args:
-            docx_bytes: Word文档的字节数据
+            docx_bytes: Word文档的字节数据（通常来自文件上传）
 
         Returns:
-            转换后的Markdown文本
+            转换后的Markdown格式文本
         """
         try:
             import tempfile
@@ -497,7 +501,10 @@ class WordConverter:
             raise
 
     def word_to_markdown_pandoc(self, docx_path: str) -> str:
-        """使用 Pandoc 高保真将 Word 转换为 Markdown。"""
+        """
+        智能文档生成器高保真转换功能：使用Pandoc将Word文档转换为Markdown
+        提供更高质量的Word到Markdown转换，保留复杂的格式和媒体资源
+        """
         try:
             import pypandoc
             logger.info("使用 Pandoc 将 Word 提取为 Markdown...")
@@ -521,13 +528,14 @@ class WordConverter:
 
     def word_to_markdown_pandoc_from_bytes(self, docx_bytes: bytes) -> str:
         """
-        使用Pandoc直接从字节数据将Word文档转换为Markdown，无需保存临时文件。
+        智能文档生成器最先进的转换功能：使用Pandoc从字节数据将Word转换为Markdown
+        结合高保真转换和无需临时文件的优势，为Web界面提供最佳的转换体验
 
         Args:
-            docx_bytes: Word文档的字节数据
+            docx_bytes: Word文档的字节数据（来自文件上传或内存读取）
 
         Returns:
-            转换后的Markdown文本
+            高质量转换后的Markdown格式文本
         """
         try:
             import pypandoc
@@ -568,6 +576,10 @@ class WordConverter:
             return self.word_to_markdown_from_bytes(docx_bytes)
 
     def has_pandoc(self) -> bool:
+        """
+        检查系统是否安装了Pandoc，以确定智能文档生成器是否可以使用高保真转换功能
+        返回True表示可以使用Pandoc进行高质量转换，False则回退到内置转换器
+        """
         try:
             import pypandoc
             pypandoc.get_pandoc_version()

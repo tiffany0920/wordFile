@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-智能文档生成器 Web 界面（重构版）
-使用 Streamlit 构建的现代化 Web 界面
-📘 功能说明：
-  - 拆分为两个主标签页：「生成新文档」与「修改文档」
-  - 保留所有原有功能（包括 Pandoc、编辑模式、图片/表格插入、修订）
-  - 各部分独立历史与回滚
-  - 优化侧边栏间距
+智能文档生成器 Web 界面 - 基于Streamlit的现代化文档处理平台
+📘 核心功能：
+  - 智能文档生成：通过通义千问LLM将输入内容转换为结构化Markdown和Word文档
+  - 文档编辑修改：支持上传现有文档进行AI辅助编辑和修订
+  - 多格式支持：支持Markdown和Word文档的双向转换
+  - 媒体资源处理：自动处理图片插入和路径管理
+  - 模板系统：提供多种文档生成模板（技术文档、报告、会议纪要等）
+  - 历史版本管理：独立的生成和编辑历史记录，支持版本回滚
 """
 
 import streamlit as st
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 # Session 初始化
 # ======================
 def initialize_session_state():
-    """初始化会话状态"""
+    """初始化智能文档生成器Web界面的会话状态变量"""
     if 'generator' not in st.session_state:
         st.session_state.generator = None
     if 'generated_files_new' not in st.session_state:
@@ -59,7 +60,7 @@ def initialize_session_state():
 
 @st.cache_resource
 def get_generator():
-    """获取文档生成器实例"""
+    """获取智能文档生成器实例（缓存优化）"""
     try:
         return DocumentGenerator()
     except Exception as e:
@@ -71,7 +72,7 @@ def get_generator():
 # 文档生成器类定义
 # ======================
 class DocumentGenerator:
-    """智能文档生成器类"""
+    """智能文档生成器Web界面专用类，整合文档生成和转换功能"""
 
     def __init__(self):
         self.markdown_generator = MarkdownGenerator()
@@ -80,7 +81,9 @@ class DocumentGenerator:
 
     def generate_document(self, input_content: str, custom_prompt: str = None,
                          markdown_filename: str = None, word_filename: str = None):
-        """生成Markdown + Word文档"""
+        """
+        智能文档生成器Web界面核心功能：生成Markdown和Word文档
+        """
         try:
             markdown_content, markdown_path = self.markdown_generator.generate_from_content(
                 input_content, custom_prompt, markdown_filename
@@ -102,7 +105,7 @@ class DocumentGenerator:
 # 主函数入口
 # ======================
 def main():
-    """主函数"""
+    """智能文档生成器Web界面主函数"""
     initialize_session_state()
 
     # 页面标题
@@ -522,8 +525,9 @@ def main():
 
 def _ensure_media_files_available(markdown_content: str):
     """
+    智能文档生成器媒体资源管理功能：
     确保Markdown中引用的媒体文件在输出目录的media文件夹中可用
-    这个函数用于处理修订版本中的图片引用问题
+    这个函数专门处理文档修订过程中的图片引用和资源同步问题
     """
     try:
         import re
@@ -592,7 +596,7 @@ def _ensure_media_files_available(markdown_content: str):
 
 
 def _debug_directory_structure():
-    """调试输出目录结构"""
+    """智能文档生成器调试功能：输出和分析目录结构"""
     try:
         import os
         logger.info("=== 目录结构调试 ===")

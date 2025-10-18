@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-系统测试脚本
-用于验证智能文档生成器的各项功能
+智能文档生成器系统测试脚本
+用于验证文档生成、转换、LLM连接等核心功能的完整性
 """
 
 import os
@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def test_imports():
-    """测试模块导入"""
+    """测试智能文档生成器的所有核心模块导入是否正常"""
     try:
         from config import Config
         from llm_client import LLMClient
@@ -27,7 +27,7 @@ def test_imports():
         return False
 
 def test_config():
-    """测试配置"""
+    """测试智能文档生成器的配置设置，包括API密钥等关键参数"""
     try:
         from config import Config
         
@@ -42,7 +42,7 @@ def test_config():
         return False
 
 def test_llm_connection():
-    """测试LLM连接"""
+    """测试智能文档生成器与通义千问LLM的连接状态和API调用能力"""
     try:
         from llm_client import LLMClient
         
@@ -58,7 +58,7 @@ def test_llm_connection():
         return False
 
 def test_markdown_generation():
-    """测试Markdown生成"""
+    """测试智能文档生成器的Markdown内容生成功能"""
     try:
         from markdown_generator import MarkdownGenerator
         
@@ -81,7 +81,7 @@ def test_markdown_generation():
         return False
 
 def test_word_conversion():
-    """测试Word转换"""
+    """测试智能文档生成器的Markdown到Word转换功能"""
     try:
         from word_converter import WordConverter
         
@@ -118,7 +118,7 @@ print("Hello, World!")
         return False
 
 def test_full_workflow():
-    """测试完整工作流程"""
+    """测试智能文档生成器的完整工作流程：从输入内容到生成Markdown和Word文档"""
     try:
         from main import DocumentGenerator
         
@@ -138,9 +138,9 @@ def test_full_workflow():
         return False
 
 def main():
-    """主测试函数"""
+    """智能文档生成器系统测试主函数"""
     print("=" * 60)
-    print("智能文档生成器 - 系统测试")
+    print("智能文档生成器 - 系统功能完整性测试")
     print("=" * 60)
     
     tests = [

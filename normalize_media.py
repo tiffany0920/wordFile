@@ -12,8 +12,9 @@ IMG_PATTERN = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
 
 def normalize_markdown_file(md_path: str) -> tuple[int, int]:
     """
-    Normalize image links in a single markdown file.
-    Returns (total_images, fixed_images).
+    规范化单个Markdown文件中的图片链接路径。
+    统一将图片引用修改为相对路径格式，确保智能文档生成器正确处理图片资源。
+    返回 (总图片数量, 已修复图片数量)。
     """
     with open(md_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -26,10 +27,11 @@ def normalize_markdown_file(md_path: str) -> tuple[int, int]:
     fixed = 0
 
     def should_fix(path: str) -> bool:
-        # Already media/ prefixed
+        # 判断图片路径是否需要规范化
+        # 如果已经是media/前缀则跳过
         if path.lower().startswith("media/"):
             return False
-        # Has directory separator – skip unless it starts with ./ or .\\
+        # 包含目录分隔符则跳过，除非以./或.\开头
         if "/" in path or "\\" in path:
             return False
         _, ext = os.path.splitext(path)
@@ -58,6 +60,10 @@ def normalize_markdown_file(md_path: str) -> tuple[int, int]:
 
 
 def main():
+    """
+    智能文档生成器媒体文件规范化工具主函数
+    扫描输出目录中的所有Markdown文件，统一规范化图片引用路径
+    """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(MEDIA_DIR, exist_ok=True)
 
@@ -69,10 +75,10 @@ def main():
         t, f = normalize_markdown_file(md)
         total_images += t
         total_fixed += f
-        print(f"{os.path.basename(md)}: images={t}, fixed={f}")
+        print(f"{os.path.basename(md)}: 图片数量={t}, 已修复={f}")
 
     print("-" * 40)
-    print(f"Summary: images={total_images}, fixed={total_fixed}")
+    print(f"处理结果: 总图片={total_images}, 已修复={total_fixed}")
 
 
 if __name__ == "__main__":

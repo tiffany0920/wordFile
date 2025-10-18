@@ -5,19 +5,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    """配置类"""
+    """智能文档生成器配置管理类，包含API密钥、模型参数、输出设置等核心配置信息"""
     
-    # 通义千问 / DashScope API配置（兼容旧的OpenAI变量以便平滑迁移）
-    # 优先使用新的环境变量，其次回退到旧变量
+    # 通义千问大模型API配置 - 智能文档生成器的核心LLM服务
+    # 支持兼容旧的OpenAI变量以便平滑迁移
+    # 优先使用新的DASHSCOPE环境变量，其次回退到旧的OPENAI变量
     DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY') or os.getenv('OPENAI_API_KEY')
     QWEN_MODEL = os.getenv('QWEN_MODEL') or os.getenv('OPENAI_MODEL', 'qwen-turbo')
-    # 可选：OpenAI兼容的Base URL（DashScope提供OpenAI兼容协议）
+    # DashScope提供的OpenAI兼容协议Base URL
     OPENAI_COMPAT_BASE_URL = os.getenv('OPENAI_COMPAT_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
     
-    # 输出文件配置
+    # 智能文档生成器输出目录配置
     OUTPUT_DIR = os.getenv('OUTPUT_DIR', 'output')
     
-    # 默认提示词模板
+    # 智能文档生成器默认提示词模板 - 用于通义千问LLM生成结构化文档
     DEFAULT_PROMPT_TEMPLATE = """
 请根据以下输入内容，生成结构化的Markdown格式文档：
 
