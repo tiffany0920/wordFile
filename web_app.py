@@ -11,6 +11,7 @@
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import os
 import logging
 from datetime import datetime
@@ -99,6 +100,126 @@ class DocumentGenerator:
             }
         except Exception as e:
             return {'success': False, 'error': str(e)}
+
+
+# ======================
+# 图片显示处理函数
+# ======================
+def display_markdown_with_images(markdown_content: str):
+    """
+    处理Markdown内容中的图片显示，确保本地图片能够正确显示
+    支持PNG、JPG、SVG等多种格式
+    """
+    import re
+    import os
+    from PIL import Image
+    import base64
+    from io import BytesIO
+
+    # 提取所有图片引用
+    img_pattern = re.compile(r'!\[(?:[^\]]*)\]\(([^)]+)\)')
+
+    # 分割内容为文本和图片部分
+    parts = []
+    last_end = 0
+
+    for match in img_pattern.finditer(markdown_content):
+        # 添加图片前的文本
+        if match.start() > last_end:
+            text_part = markdown_content[last_end:match.start()]
+            if text_part.strip():
+                st.markdown(text_part)
+
+        # 处理图片
+        img_path = match.group(1)
+        alt_text = re.search(r'!\[([^\]]*)\]', match.group(0))
+        alt_text = alt_text.group(1) if alt_text else ""
+
+        # 如果是URL，直接使用Markdown显示
+        if img_path.startswith('http://') or img_path.startswith('https://'):
+            st.markdown(f"![{alt_text}]({img_path})")
+        else:
+            # 处理本地图片
+            try:
+                # 尝试不同的路径
+                possible_paths = [
+                    img_path,  # 原始路径
+                    os.path.join(Config.OUTPUT_DIR, img_path),  # 相对于输出目录
+                    os.path.join(Config.OUTPUT_DIR, 'media', os.path.basename(img_path)),  # media目录中
+                    os.path.join('output', img_path),  # 相对于当前目录
+                    os.path.join('output', 'media', os.path.basename(img_path)),  # 相对于当前目录的media
+                ]
+
+                img_found = False
+                img_displayed = False
+
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        try:
+                            file_ext = os.path.splitext(path)[1].lower()
+
+                            # 处理SVG文件
+                            if file_ext == '.svg':
+                                try:
+                                    with open(path, 'r', encoding='utf-8') as f:
+                                        svg_content = f.read()
+
+                                    # 使用HTML来显示SVG
+                                    st.markdown(f"**{alt_text}**" if alt_text else "")
+                                    st.components.v1.html(svg_content, height=300)
+                                    img_found = True
+                                    img_displayed = True
+                                    break
+                                except Exception as svg_e:
+                                    # 如果HTML方式失败，尝试base64编码
+                                    try:
+                                        with open(path, 'rb') as f:
+                                            svg_bytes = f.read()
+                                        svg_base64 = base64.b64encode(svg_bytes).decode()
+                                        svg_data_url = f"data:image/svg+xml;base64,{svg_base64}"
+                                        st.markdown(f"![{alt_text}]({svg_data_url})")
+                                        img_found = True
+                                        img_displayed = True
+                                        break
+                                    except Exception as svg_base64_e:
+                                        logger.warning(f"无法显示SVG {path} (HTML和base64都失败): {svg_base64_e}")
+                                        continue
+
+                            # 处理其他图片格式（PNG, JPG等）
+                            else:
+                                try:
+                                    img = Image.open(path)
+                                    st.image(img, caption=alt_text, use_container_width=True)
+                                    img_found = True
+                                    img_displayed = True
+                                    break
+                                except Exception as img_e:
+                                    logger.warning(f"无法打开图片 {path}: {img_e}")
+                                    continue
+
+                        except Exception as e:
+                            logger.warning(f"处理图片文件 {path} 时出错: {e}")
+                            continue
+
+                if not img_found:
+                    st.warning(f"⚠️ 无法找到本地图片: {img_path}")
+                    # 尝试显示原始Markdown以防路径问题
+                    st.markdown(f"![{alt_text}]({img_path})")
+                elif not img_displayed:
+                    st.warning(f"⚠️ 找到图片文件但无法显示: {img_path}")
+                    st.markdown(f"![{alt_text}]({img_path})")
+
+            except Exception as e:
+                logger.warning(f"处理图片时出错 {img_path}: {e}")
+                st.markdown(f"![{alt_text}]({img_path})")
+
+        last_end = match.end()
+
+    # 添加最后剩余的文本
+    if last_end < len(markdown_content):
+        remaining_text = markdown_content[last_end:]
+        if remaining_text.strip():
+            st.markdown(remaining_text)
 
 
 # ======================
@@ -285,8 +406,10 @@ def main():
                     st.success("✅ 文档生成成功！")
                     st.info(f"📄 Markdown: {os.path.basename(result['markdown_path'])}")
                     st.info(f"📝 Word: {os.path.basename(result['word_path'])}")
+
+                    # 处理Markdown中的图片显示
                     st.markdown("### 👀 预览")
-                    st.markdown(result['markdown_content'])
+                    display_markdown_with_images(result['markdown_content'])
                     st.session_state.generated_files_new.append({
                         'timestamp': datetime.now(),
                         'markdown_path': result['markdown_path'],
@@ -385,6 +508,13 @@ def main():
         current_editor_content = st.session_state.get("edit_md_text", "")
         if current_editor_content != st.session_state.get("edit_md_content", ""):
             st.session_state["edit_md_content"] = current_editor_content
+
+        # 添加预览区域
+        if current_editor_content.strip():
+            st.markdown("---")
+            st.subheader("👀 实时预览")
+            with st.expander("展开预览", expanded=True):
+                display_markdown_with_images(current_editor_content)
 
         # ======== 插图与表格 ========
         st.markdown("---")
